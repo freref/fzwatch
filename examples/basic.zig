@@ -1,8 +1,8 @@
 const std = @import("std");
 const fzwatch = @import("fzwatch");
 
-// TODO check callback interface
-fn callback(event: fzwatch.Event) void {
+fn callback(event: fzwatch.Event, context: *anyopaque) void {
+    _ = context;
     switch (event) {
         .modified => std.debug.print("File was modified!\n", .{}),
     }

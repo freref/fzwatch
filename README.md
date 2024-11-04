@@ -7,7 +7,7 @@ A lightweight and cross-platform file watcher for your Zig projects.
 A basic example can be found under [examples](./examples/basic.zig). The API is defined as follows:
 ```zig
 pub const Event = enum { modified };
-pub const Callback = fn (event: Event) void;
+pub const Callback = fn (event: Event, context: *anyopaque) void;
 
 pub fn init(allocator: std.mem.Allocator) !MacosWatcher;
 pub fn deinit(self: *MacosWatcher) void;

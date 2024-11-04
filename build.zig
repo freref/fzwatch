@@ -4,20 +4,9 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const lib = b.addStaticLibrary(.{
-        .name = "fzwatch",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    if (target.result.os.tag == .macos) lib.linkFramework("CoreServices");
-
     const module = b.addModule("fzwatch", .{
         .root_source_file = b.path("src/main.zig"),
     });
-
-    b.installArtifact(lib);
 
     const example = b.addExecutable(.{
         .name = "fzwatch-example",

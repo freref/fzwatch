@@ -8,14 +8,14 @@ fn callback(event: fzwatch.Event) void {
     }
 }
 
-fn watcherThread(watcher: *fzwatch.FileWatcher) !void {
+fn watcherThread(watcher: *fzwatch.Watcher) !void {
     try watcher.start();
 }
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    var watcher = try fzwatch.FileWatcher.init(allocator);
+    var watcher = try fzwatch.Watcher.init(allocator);
     defer watcher.deinit();
 
     try watcher.addFile("README.md");

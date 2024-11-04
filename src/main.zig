@@ -19,4 +19,4 @@ comptime {
     _ = watcher_os;
 }
 
-pub const FileWatcher = watcher_os;
+pub const Watcher = watcher_os;

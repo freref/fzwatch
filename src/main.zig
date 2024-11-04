@@ -13,4 +13,11 @@ comptime {
 
 pub const FileWatcher = watcher_os;
 
-pub fn main() !void {}
+pub fn main() !void {
+    const allocator = std.heap.page_allocator;
+    var watcher = try FileWatcher.init(allocator);
+    const path = "test.txt";
+
+    try watcher.addFile(path);
+    try watcher.removeFile(path);
+}

@@ -1,7 +1,7 @@
 const std = @import("std");
 const darwin = std.os.darwin;
-const FileEvent = @import("common.zig").FileEvent;
-const FileCallback = @import("common.zig").FileCallback;
+const Event = @import("interfaces.zig").Event;
+const Callback = @import("interfaces.zig").Callback;
 const c = @cImport({
     @cInclude("CoreServices/CoreServices.h");
 });
@@ -11,7 +11,7 @@ pub const MacosWatcher = struct {
     // XXX hold the files as []u8 so we don't need to convert twice?
     files: std.ArrayList(c.CFStringRef),
     stream: c.FSEventStreamRef,
-    callback: ?*const FileCallback,
+    callback: ?*const Callback,
     running: bool,
 
     pub fn init(allocator: std.mem.Allocator) !MacosWatcher {
@@ -63,7 +63,7 @@ pub const MacosWatcher = struct {
         }
     }
 
-    pub fn setCallback(self: *MacosWatcher, callback: FileCallback) void {
+    pub fn setCallback(self: *MacosWatcher, callback: Callback) void {
         self.callback = callback;
     }
 
@@ -85,7 +85,7 @@ pub const MacosWatcher = struct {
         while (i < numEvents) : (i += 1) {
             const flags = eventFlags[i];
             if (flags & c.kFSEventStreamEventFlagItemModified != 0) {
-                self.callback.?(FileEvent.modified);
+                self.callback.?(Event.modified);
             }
         }
     }

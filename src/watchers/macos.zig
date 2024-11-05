@@ -6,6 +6,10 @@ const c = @cImport({
     @cInclude("CoreServices/CoreServices.h");
 });
 
+pub const Opts = struct {
+    latency: f16 = 1.0,
+};
+
 pub const MacosWatcher = struct {
     allocator: std.mem.Allocator,
     // XXX hold the files as []u8 so we don't need to convert twice?
@@ -65,7 +69,7 @@ pub const MacosWatcher = struct {
         }
     }
 
-    pub fn setCallback(self: *MacosWatcher, callback: Callback, context: *anyopaque) void {
+    pub fn setCallback(self: *MacosWatcher, callback: Callback, context: ?*anyopaque) void {
         self.callback = callback;
         self.context = context;
     }
@@ -88,12 +92,12 @@ pub const MacosWatcher = struct {
         while (i < numEvents) : (i += 1) {
             const flags = eventFlags[i];
             if (flags & c.kFSEventStreamEventFlagItemModified != 0) {
-                self.callback.?(self.context.?, Event.modified);
+                self.callback.?(self.context, Event.modified);
             }
         }
     }
 
-    pub fn start(self: *MacosWatcher) !void {
+    pub fn start(self: *MacosWatcher, opts: Opts) !void {
         if (self.files.items.len == 0) return error.NoFilesToWatch;
 
         const files = c.CFArrayCreate(
@@ -104,7 +108,6 @@ pub const MacosWatcher = struct {
         );
         defer c.CFRelease(files);
 
-        const latency: c.CFAbsoluteTime = 1.0;
         var context = c.FSEventStreamContext{
             .version = 0,
             .info = self,
@@ -119,7 +122,7 @@ pub const MacosWatcher = struct {
             &context,
             files,
             c.kFSEventStreamEventIdSinceNow,
-            latency,
+            opts.latency,
             c.kFSEventStreamCreateFlagFileEvents,
         );
 
@@ -139,7 +142,7 @@ pub const MacosWatcher = struct {
         self.running = true;
 
         while (self.running) {
-            _ = c.CFRunLoopRunInMode(c.kCFRunLoopDefaultMode, 0.5, 1);
+            _ = c.CFRunLoopRunInMode(c.kCFRunLoopDefaultMode, 0, 1);
         }
     }
 

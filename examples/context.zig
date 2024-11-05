@@ -34,7 +34,7 @@ const Object = struct {
     }
 
     fn watcherThread(watcher: *fzwatch.Watcher) !void {
-        try watcher.start();
+        try watcher.start(.{});
     }
 
     pub fn start(self: *Object) !void {

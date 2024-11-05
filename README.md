@@ -15,11 +15,15 @@ A basic example can be found under [examples](./examples/basic.zig). The API is 
 pub const Event = enum { modified };
 pub const Callback = fn (context: *anyopaque, event: Event) void;
 
-pub fn init(allocator: std.mem.Allocator) !MacosWatcher;
-pub fn deinit(self: *MacosWatcher) void;
-pub fn addFile(self: *MacosWatcher, path: []const u8) !void;
-pub fn removeFile(self: *MacosWatcher, path: []const u8) !void;
-pub fn setCallback(self: *MacosWatcher, callback: Callback) void;
-pub fn start(self: *MacosWatcher) !void;
-pub fn stop(self: *MacosWatcher) !void;
+pub const Opts = struct {
+    latency: f16 = 1.0,
+};
+
+pub fn init(allocator: std.mem.Allocator) !Watcher;
+pub fn deinit(self: *Watcher) void;
+pub fn addFile(self: *Watcher, path: []const u8) !void;
+pub fn removeFile(self: *Watcher, path: []const u8) !void;
+pub fn setCallback(self: *Watcher, callback: Callback) void;
+pub fn start(self: *Watcher, opts: Opts) !void;
+pub fn stop(self: *Watcher) !void;
 ````

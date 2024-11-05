@@ -1,7 +1,7 @@
 const std = @import("std");
 const fzwatch = @import("fzwatch");
 
-fn callback(context: *anyopaque, event: fzwatch.Event) void {
+fn callback(context: ?*anyopaque, event: fzwatch.Event) void {
     _ = context;
     switch (event) {
         .modified => std.debug.print("File was modified!\n", .{}),
@@ -9,7 +9,7 @@ fn callback(context: *anyopaque, event: fzwatch.Event) void {
 }
 
 fn watcherThread(watcher: *fzwatch.Watcher) !void {
-    try watcher.start();
+    try watcher.start(.{});
 }
 
 pub fn main() !void {
@@ -19,7 +19,7 @@ pub fn main() !void {
     defer watcher.deinit();
 
     try watcher.addFile("README.md");
-    watcher.setCallback(callback);
+    watcher.setCallback(callback, null);
 
     const thread = try std.Thread.spawn(.{}, watcherThread, .{&watcher});
 

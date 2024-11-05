@@ -57,6 +57,5 @@ pub fn build(b: *std.Build) void {
     const run_step_context = b.step("run-context", "Run the example");
     run_step_context.dependOn(&run_cmd_context.step);
 
-    // Make the library installable
     b.installArtifact(lib);
 }

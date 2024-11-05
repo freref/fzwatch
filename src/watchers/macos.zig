@@ -1,21 +1,16 @@
 const std = @import("std");
 const darwin = std.os.darwin;
-const Event = @import("interfaces.zig").Event;
-const Callback = @import("interfaces.zig").Callback;
+const interfaces = @import("interfaces.zig");
 const c = @cImport({
     @cInclude("CoreServices/CoreServices.h");
 });
-
-pub const Opts = struct {
-    latency: f16 = 1.0,
-};
 
 pub const MacosWatcher = struct {
     allocator: std.mem.Allocator,
     // XXX hold the files as []u8 so we don't need to convert twice?
     files: std.ArrayList(c.CFStringRef),
     stream: c.FSEventStreamRef,
-    callback: ?*const Callback,
+    callback: ?*const interfaces.Callback,
     running: bool,
     context: ?*anyopaque,
 
@@ -69,7 +64,7 @@ pub const MacosWatcher = struct {
         }
     }
 
-    pub fn setCallback(self: *MacosWatcher, callback: Callback, context: ?*anyopaque) void {
+    pub fn setCallback(self: *MacosWatcher, callback: interfaces.Callback, context: ?*anyopaque) void {
         self.callback = callback;
         self.context = context;
     }
@@ -92,12 +87,12 @@ pub const MacosWatcher = struct {
         while (i < numEvents) : (i += 1) {
             const flags = eventFlags[i];
             if (flags & c.kFSEventStreamEventFlagItemModified != 0) {
-                self.callback.?(self.context, Event.modified);
+                self.callback.?(self.context, interfaces.Event.modified);
             }
         }
     }
 
-    pub fn start(self: *MacosWatcher, opts: Opts) !void {
+    pub fn start(self: *MacosWatcher, opts: interfaces.Opts) !void {
         if (self.files.items.len == 0) return error.NoFilesToWatch;
 
         const files = c.CFArrayCreate(

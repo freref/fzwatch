@@ -13,6 +13,7 @@ pub const MacosWatcher = struct {
     stream: c.FSEventStreamRef,
     callback: ?*const Callback,
     running: bool,
+    context: ?*anyopaque,
 
     pub fn init(allocator: std.mem.Allocator) !MacosWatcher {
         return MacosWatcher{
@@ -21,6 +22,7 @@ pub const MacosWatcher = struct {
             .stream = null,
             .callback = null,
             .running = false,
+            .context = null,
         };
     }
 
@@ -63,8 +65,9 @@ pub const MacosWatcher = struct {
         }
     }
 
-    pub fn setCallback(self: *MacosWatcher, callback: Callback) void {
+    pub fn setCallback(self: *MacosWatcher, callback: Callback, context: *anyopaque) void {
         self.callback = callback;
+        self.context = context;
     }
 
     fn fsEventsCallback(
@@ -85,7 +88,7 @@ pub const MacosWatcher = struct {
         while (i < numEvents) : (i += 1) {
             const flags = eventFlags[i];
             if (flags & c.kFSEventStreamEventFlagItemModified != 0) {
-                self.callback.?(Event.modified, self);
+                self.callback.?(self.context.?, Event.modified);
             }
         }
     }

@@ -1,7 +1,7 @@
 const std = @import("std");
 const fzwatch = @import("fzwatch");
 
-fn callback(event: fzwatch.Event, context: *anyopaque) void {
+fn callback(context: *anyopaque, event: fzwatch.Event) void {
     _ = context;
     switch (event) {
         .modified => std.debug.print("File was modified!\n", .{}),
@@ -23,7 +23,6 @@ pub fn main() !void {
 
     const thread = try std.Thread.spawn(.{}, watcherThread, .{&watcher});
 
-    std.debug.print("Started watching test.txt...\n", .{});
     var i: usize = 0;
     while (true) : (i += 1) {
         std.debug.print("Working... (iteration {d})\n", .{i});

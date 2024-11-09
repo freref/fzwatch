@@ -14,10 +14,7 @@ A basic example can be found under [examples](./examples/basic.zig). The API is 
 ```zig
 pub const Event = enum { modified };
 pub const Callback = fn (context: *anyopaque, event: Event) void;
-
-pub const Opts = struct {
-    latency: f16 = 1.0,
-};
+pub const Opts = struct { latency: f16 = 1.0 };
  
 pub fn init(allocator: std.mem.Allocator) !Watcher;
 pub fn deinit(self: *Watcher) void;

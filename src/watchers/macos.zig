@@ -130,7 +130,7 @@ pub const MacosWatcher = struct {
         );
 
         if (c.FSEventStreamStart(self.stream.?) == 0) {
-            try self.stop();
+            self.stop();
             return error.StreamStartFailed;
         }
 

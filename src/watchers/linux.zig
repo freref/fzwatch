@@ -1,29 +1,24 @@
 const std = @import("std");
-
-const Event = @import("interfaces.zig").Event;
-const Callback = @import("interfaces.zig").Callback;
-const c = @cImport({
-    @cInclude("sys/inotify.h");
-});
-
-pub const Opts = struct {
-    latency: f16 = 1.0,
-};
+const interfaces = @import("interfaces.zig");
 
 pub const LinuxWatcher = struct {
     allocator: std.mem.Allocator,
-    // XXX hold the files as []u8 so we don't need to convert twice?
-    files: std.ArrayList([]const u8),
-    stream: i32,
-    callback: ?*const Callback,
+    inotify_fd: i32,
+    paths: std.ArrayList([]const u8),
+    offset: usize,
+    callback: ?*const interfaces.Callback,
     running: bool,
     context: ?*anyopaque,
 
     pub fn init(allocator: std.mem.Allocator) !LinuxWatcher {
+        const fd = try std.posix.inotify_init1(std.os.linux.IN.NONBLOCK);
+        errdefer std.posix.close(fd);
+
         return LinuxWatcher{
             .allocator = allocator,
-            .files = std.ArrayList([]const u8).init(allocator),
-            .stream = -1,
+            .inotify_fd = @intCast(fd),
+            .paths = std.ArrayList([]const u8).init(allocator),
+            .offset = 1,
             .callback = null,
             .running = false,
             .context = null,
@@ -31,111 +26,84 @@ pub const LinuxWatcher = struct {
     }
 
     pub fn deinit(self: *LinuxWatcher) void {
-        if (self.stream == -1) try self.stop();
-        for (self.files.items) |file| {
-            c.CFRelease(file);
-        }
-        self.files.deinit();
+        self.stop();
+        self.paths.deinit();
+        std.posix.close(self.inotify_fd);
     }
 
     pub fn addFile(self: *LinuxWatcher, path: []const u8) !void {
-        try self.files.append(path);
+        _ = try std.posix.inotify_add_watch(
+            self.inotify_fd,
+            path,
+            std.os.linux.IN.MODIFY,
+        );
+
+        try self.paths.append(path);
     }
 
     pub fn removeFile(self: *LinuxWatcher, path: []const u8) !void {
-        defer c.CFRelease(path);
-
-        for (self.files.items, 0..) |file, index| {
-            if ((file == path)) {
-                c.CFRelease(file);
-                _ = self.files.orderedRemove(index);
-                break;
+        for (0.., self.paths) |idx, mem_path| {
+            if (mem_path == path) {
+                _ = std.posix.inotify_rm_watch(self.inotify_fd, idx - self.offset);
+                try self.paths.items().remove(idx);
+                self.offset += 1;
+                return;
             }
         }
     }
 
-    pub fn setCallback(self: *LinuxWatcher, callback: Callback, context: ?*anyopaque) void {
+    pub fn setCallback(self: *LinuxWatcher, callback: interfaces.Callback, context: ?*anyopaque) void {
         self.callback = callback;
         self.context = context;
     }
 
-    fn fsEventsCallback(
-        stream: c.ConstFSEventStreamRef,
-        info: ?*anyopaque,
-        numEvents: usize,
-        eventPaths: ?*anyopaque,
-        eventFlags: [*c]const c.FSEventStreamEventFlags,
-        eventIds: [*c]const c.FSEventStreamEventId,
-    ) callconv(.C) void {
-        _ = stream;
-        _ = eventPaths;
-        _ = eventIds;
-
-        const self = @as(*LinuxWatcher, @ptrCast(@alignCast(info.?)));
-
-        var i: usize = 0;
-        while (i < numEvents) : (i += 1) {
-            const flags = eventFlags[i];
-            if (flags & c.kFSEventStreamEventFlagItemModified != 0) {
-                self.callback.?(self.context, Event.modified);
-            }
-        }
-    }
-
-    pub fn start(self: *LinuxWatcher, opts: Opts) !void {
-        if (self.files.items.len == 0) return error.NoFilesToWatch;
-
-        const files = std.ArrayList([]const u8).init(self.allocator);
-        defer files.deinit();
-        _ = opts;
-
-        // var context = c.FSEventStreamContext{
-        //     .version = 0,
-        //     .info = self,
-        //     .retain = null,
-        //     .release = null,
-        //     .copyDescription = null,
-        // };
-
-        // stream is now a queue of events.
-        self.stream = c.inotify_init1(c.IN_NONBLOCK);
-        if (self.stream == -1) return error.StreamCreateFailed;
-
-        var watch_descriptors = try std.heap.page_allocator.alloc(i32, self.files.items.len);
-        defer watch_descriptors.deinit();
-
-        for (self.files.items, 0..) |file, index| {
-            watch_descriptors[index] = c.inotify_add_watch(self.stream, file, c.IN_MODIFY);
-            if (watch_descriptors[index] == -1) {
-                return error.StreamStartFailed;
-            }
-        }
-
-        c.FSEventStreamScheduleWithRunLoop(
-            self.stream.?,
-            c.CFRunLoopGetCurrent(),
-            c.kCFRunLoopDefaultMode,
-        );
-
-        if (c.FSEventStreamStart(self.stream.?) == 0) {
-            try self.stop();
-            return error.StreamStartFailed;
-        }
+    pub fn start(self: *LinuxWatcher, opts: interfaces.Opts) !void {
+        // TODO add polling instead of busy waiting
+        if (self.paths.items.len == 0) return error.NoFilesToWatch;
 
         self.running = true;
+        var buffer: [4096]u8 align(@alignOf(std.os.linux.inotify_event)) = undefined;
 
         while (self.running) {
-            _ = c.CFRunLoopRunInMode(c.kCFRunLoopDefaultMode, 0, 1);
+            const length = std.posix.read(self.inotify_fd, &buffer) catch |err| switch (err) {
+                error.WouldBlock => {
+                    std.time.sleep(@as(u64, @intFromFloat(@as(f64, opts.latency) * @as(f64, @floatFromInt(std.time.ns_per_s)))));
+                    continue;
+                },
+                else => {
+                    return err;
+                },
+            };
+
+            var ptr: [*]u8 = &buffer;
+            const end_ptr = ptr + @as(usize, @intCast(length));
+
+            while (@intFromPtr(ptr) < @intFromPtr(end_ptr)) {
+                const ev = @as(*const std.os.linux.inotify_event, @ptrCast(@alignCast(ptr)));
+                // Editors like vim create temporary files when saving
+                // So we have to re-add the file to the watcher
+                if (ev.mask & std.os.linux.IN.IGNORED != 0) {
+                    const wd_usize = @as(usize, @intCast(@max(0, ev.wd)));
+                    if (wd_usize < self.offset) {
+                        return error.InvalidWatchDescriptor;
+                    }
+                    const index = wd_usize - self.offset;
+                    try self.addFile(self.paths.items[index]);
+                    if (self.callback) |callback| {
+                        callback(self.context, interfaces.Event.modified);
+                    }
+                } else if (ev.mask & std.os.linux.IN.MODIFY != 0) {
+                    if (self.callback) |callback| {
+                        callback(self.context, interfaces.Event.modified);
+                    }
+                }
+
+                ptr = @alignCast(ptr + @sizeOf(std.os.linux.inotify_event) + ev.len);
+            }
         }
     }
 
-    pub fn stop(self: *LinuxWatcher) !void {
+    pub fn stop(self: *LinuxWatcher) void {
         self.running = false;
-        if (self.stream) |stream| {
-            c.FSEventStreamStop(stream);
-            c.FSEventStreamInvalidate(stream);
-            c.FSEventStreamRelease(stream);
-            self.stream = null;
-        }
     }
 };

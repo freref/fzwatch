@@ -18,7 +18,7 @@ pub const Callback = fn (context: *anyopaque, event: Event) void;
 pub const Opts = struct {
     latency: f16 = 1.0,
 };
-
+ 
 pub fn init(allocator: std.mem.Allocator) !Watcher;
 pub fn deinit(self: *Watcher) void;
 pub fn addFile(self: *Watcher, path: []const u8) !void;

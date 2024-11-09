@@ -26,7 +26,7 @@ pub const MacosWatcher = struct {
     }
 
     pub fn deinit(self: *MacosWatcher) void {
-        if (self.stream != null) try self.stop();
+        if (self.stream != null) self.stop();
         for (self.files.items) |file| {
             c.CFRelease(file);
         }
@@ -130,7 +130,7 @@ pub const MacosWatcher = struct {
         );
 
         if (c.FSEventStreamStart(self.stream.?) == 0) {
-            try self.stop();
+            self.stop();
             return error.StreamStartFailed;
         }
 
@@ -141,7 +141,7 @@ pub const MacosWatcher = struct {
         }
     }
 
-    pub fn stop(self: *MacosWatcher) !void {
+    pub fn stop(self: *MacosWatcher) void {
         self.running = false;
         if (self.stream) |stream| {
             c.FSEventStreamStop(stream);

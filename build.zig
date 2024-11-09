@@ -15,6 +15,8 @@ pub fn build(b: *std.Build) void {
         lib.linkFramework("CoreServices");
     }
 
+    lib.linkLibC();
+
     const module = b.addModule("fzwatch", .{
         .root_source_file = b.path("src/main.zig"),
     });

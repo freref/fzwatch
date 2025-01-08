@@ -3,8 +3,8 @@ const fzwatch = @import("fzwatch");
 
 fn callback(context: ?*anyopaque, event: fzwatch.Event) void {
     _ = context;
-    switch (event) {
-        .modified => std.debug.print("File was modified!\n", .{}),
+    switch (event.kind) {
+        .modified => std.debug.print("File {d} was modified!\n", .{event.item}),
     }
 }
 
@@ -19,7 +19,9 @@ pub fn main() !void {
     defer watcher.deinit();
 
     try watcher.addFile("README.md");
+    // try watcher.removeFile("README.md");
     try watcher.addFile("build.zig");
+    try watcher.removeFile("build.zig");
     try watcher.addFile("build.zig.zon");
     try watcher.removeFile("build.zig.zon");
     watcher.setCallback(callback, null);

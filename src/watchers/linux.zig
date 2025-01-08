@@ -8,11 +8,6 @@ pub const LinuxWatcher = struct {
         fd: i32,
         /// inotify wd offset from removing files
         offset: usize,
-        /// the old watch descriptors that would have a lower wd than `offset`
-        /// making them unsafe to normally check. by keeping them here we know that
-        /// these specific low wd's are safe
-        /// maps wd to offset at the time of population
-        old: std.AutoHashMap(i32, i32)
     },
     callback: ?*const interfaces.Callback,
     running: bool,
@@ -28,7 +23,6 @@ pub const LinuxWatcher = struct {
             .inotify = .{
                 .fd = @intCast(fd),
                 .offset     = 1,
-                .old        = std.AutoHashMap(i32, i32).init(allocator)
             },
             .callback = null,
             .running = false,
@@ -39,18 +33,15 @@ pub const LinuxWatcher = struct {
     pub fn deinit(self: *LinuxWatcher) void {
         self.stop();
         self.paths.deinit();
-        self.inotify.old.deinit();
         std.posix.close(self.inotify.fd);
     }
 
     pub fn addFile(self: *LinuxWatcher, path: []const u8) !void {
-        const wd = try std.posix.inotify_add_watch(
+        _ = try std.posix.inotify_add_watch(
             self.inotify.fd,
             path,
             std.os.linux.IN.MODIFY,
         );
-
-        try self.inotify.old.putNoClobber(wd, @intCast(self.inotify.offset));
 
         try self.paths.append(path);
     }
@@ -63,9 +54,6 @@ pub const LinuxWatcher = struct {
             _ = std.posix.inotify_rm_watch(self.inotify.fd, @intCast(idx + self.inotify.offset));
             self.inotify.offset += 1;
             _ = self.paths.orderedRemove(idx);
-
-            // self.inotify.old.clearRetainingCapacity();
-            // for(0..idx) |i| try self.inotify.old.putNoClobber(@intCast(i), 0);
 
             return;
         }
@@ -98,14 +86,10 @@ pub const LinuxWatcher = struct {
             var i: usize = 0;
             while (i < length) : (i += buffer[i].len + @sizeOf(std.os.linux.inotify_event)) {
                 const ev = buffer[i];
-                if(ev.wd < self.inotify.offset) {
-                    try if(self.inotify.old.get(ev.wd)) |offset| {
-                        std.log.info("{d}, {d}", .{offset, ev.wd});
-                        try self.addFile(self.paths.items[@intCast(ev.wd - offset)]);
-                    }
-                    else if(ev.wd == 0) {continue;}
-                    else error.InvalidWatchDescriptor;
-                } else if (ev.wd > self.paths.items.len + self.inotify.offset)
+
+                if(ev.wd == 0) {continue;}
+                else if(ev.wd < self.inotify.offset) {continue;}
+                else if (ev.wd > self.paths.items.len + self.inotify.offset)
                     return error.InvalidWatchDescriptor;
 
                 const index = @as(usize, @intCast(@max(0, ev.wd))) - self.inotify.offset;

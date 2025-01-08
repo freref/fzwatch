@@ -5,7 +5,6 @@ pub const LinuxWatcher = struct {
     allocator: std.mem.Allocator,
     inotify_fd: i32,
     paths: std.ArrayList([]const u8),
-    offset: usize,
     callback: ?*const interfaces.Callback,
     running: bool,
     context: ?*anyopaque,
@@ -18,7 +17,6 @@ pub const LinuxWatcher = struct {
             .allocator = allocator,
             .inotify_fd = @intCast(fd),
             .paths = std.ArrayList([]const u8).init(allocator),
-            .offset = 1,
             .callback = null,
             .running = false,
             .context = null,
@@ -42,11 +40,10 @@ pub const LinuxWatcher = struct {
     }
 
     pub fn removeFile(self: *LinuxWatcher, path: []const u8) !void {
-        for (0.., self.paths) |idx, mem_path| {
-            if (mem_path == path) {
-                _ = std.posix.inotify_rm_watch(self.inotify_fd, idx - self.offset);
-                try self.paths.items().remove(idx);
-                self.offset += 1;
+        for (0.., self.paths.items) |idx, mem_path| {
+            if (std.mem.eql(u8, mem_path, path)) {
+                std.posix.inotify_rm_watch(self.inotify_fd, @intCast(idx + @intFromBool(idx == self.paths.items.len)));
+                _ = self.paths.swapRemove(idx);
                 return;
             }
         }
@@ -84,11 +81,11 @@ pub const LinuxWatcher = struct {
                 // So we have to re-add the file to the watcher
                 if (ev.mask & std.os.linux.IN.IGNORED != 0) {
                     const wd_usize = @as(usize, @intCast(@max(0, ev.wd)));
-                    if (wd_usize < self.offset) {
+                    if (wd_usize > self.paths.items.len) {
                         return error.InvalidWatchDescriptor;
                     }
-                    const index = wd_usize - self.offset;
-                    try self.addFile(self.paths.items[index]);
+                    // TODO: remove previous buffer
+                    try self.addFile(self.paths.items[wd_usize - 1]);
                     if (self.callback) |callback| {
                         callback(self.context, interfaces.Event.modified);
                     }

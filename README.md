@@ -1,6 +1,6 @@
 # fzwatch
 A lightweight and cross-platform file watcher for your Zig projects.
-> [!NOTE]  
+> [!NOTE]
 > This project exists to support [fancy-cat](https://github.com/freref/fancy-cat) and has limited features.
 
 ## Instructions
@@ -15,7 +15,7 @@ A basic example can be found under [examples](./examples/basic.zig). The API is 
 pub const Event = enum { modified };
 pub const Callback = fn (context: *anyopaque, event: Event) void;
 pub const Opts = struct { latency: f16 = 1.0 };
- 
+
 pub fn init(allocator: std.mem.Allocator) !Watcher;
 pub fn deinit(self: *Watcher) void;
 pub fn addFile(self: *Watcher, path: []const u8) !void;

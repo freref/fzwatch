@@ -3,10 +3,17 @@ const interfaces = @import("interfaces.zig");
 
 pub const LinuxWatcher = struct {
     allocator: std.mem.Allocator,
-    inotify_fd: i32,
     paths: std.ArrayList([]const u8),
-    /// inotify wd offset from removing files
-    offset: usize,
+    inotify: struct {
+        fd: i32,
+        /// inotify wd offset from removing files
+        offset: usize,
+        /// the old watch descriptors that would have a lower wd than `offset`
+        /// making them unsafe to normally check. by keeping them here we know that
+        /// these specific low wd's are safe
+        /// maps wd to offset at the time of population
+        old: std.AutoHashMap(i32, i32)
+    },
     callback: ?*const interfaces.Callback,
     running: bool,
     context: ?*anyopaque,
@@ -17,9 +24,12 @@ pub const LinuxWatcher = struct {
 
         return LinuxWatcher{
             .allocator = allocator,
-            .inotify_fd = @intCast(fd),
             .paths = std.ArrayList([]const u8).init(allocator),
-            .offset = 1,
+            .inotify = .{
+                .fd = @intCast(fd),
+                .offset     = 1,
+                .old        = std.AutoHashMap(i32, i32).init(allocator)
+            },
             .callback = null,
             .running = false,
             .context = null,
@@ -29,15 +39,18 @@ pub const LinuxWatcher = struct {
     pub fn deinit(self: *LinuxWatcher) void {
         self.stop();
         self.paths.deinit();
-        std.posix.close(self.inotify_fd);
+        self.inotify.old.deinit();
+        std.posix.close(self.inotify.fd);
     }
 
     pub fn addFile(self: *LinuxWatcher, path: []const u8) !void {
-        _ = try std.posix.inotify_add_watch(
-            self.inotify_fd,
+        const wd = try std.posix.inotify_add_watch(
+            self.inotify.fd,
             path,
             std.os.linux.IN.MODIFY,
         );
+
+        try self.inotify.old.putNoClobber(wd, @intCast(self.inotify.offset));
 
         try self.paths.append(path);
     }
@@ -47,25 +60,12 @@ pub const LinuxWatcher = struct {
             if (!std.mem.eql(u8, mem_path, path))
                 continue;
 
-            // need to update wd of all previous files so they are above the offset
-            // so we just remove and add them back from inotify watch
-            // TODO: 100% better way to do this
-            for(0..idx) |i| {
-                std.posix.inotify_rm_watch(self.inotify_fd, @intCast(idx + self.offset - i));
-
-                const t = try std.posix.inotify_add_watch(
-                    self.inotify_fd,
-                    self.paths.items[i],
-                    std.os.linux.IN.MODIFY,
-                );
-
-                std.log.debug("removed: {d} added {d}", .{idx + self.offset - i, t});
-            }
-
-            self.offset += idx;
-            std.posix.inotify_rm_watch(self.inotify_fd, @intCast(idx + self.offset));
-            self.offset += 1;
+            _ = std.posix.inotify_rm_watch(self.inotify.fd, @intCast(idx + self.inotify.offset));
+            self.inotify.offset += 1;
             _ = self.paths.orderedRemove(idx);
+
+            // self.inotify.old.clearRetainingCapacity();
+            // for(0..idx) |i| try self.inotify.old.putNoClobber(@intCast(i), 0);
 
             return;
         }
@@ -84,7 +84,7 @@ pub const LinuxWatcher = struct {
         var buffer: [4096]std.os.linux.inotify_event = undefined;
 
         while (self.running) {
-            const length = std.posix.read(self.inotify_fd, std.mem.sliceAsBytes(&buffer)) catch |err| switch (err) {
+            const length = std.posix.read(self.inotify.fd, std.mem.sliceAsBytes(&buffer)) catch |err| switch (err) {
                 error.WouldBlock => {
                     std.time.sleep(@as(u64, @intFromFloat(@as(f64, opts.latency) * @as(f64, @floatFromInt(std.time.ns_per_s)))));
                     continue;
@@ -94,34 +94,32 @@ pub const LinuxWatcher = struct {
                 },
             };
 
+            // in bytes
             var i: usize = 0;
             while (i < length) : (i += buffer[i].len + @sizeOf(std.os.linux.inotify_event)) {
                 const ev = buffer[i];
+                if(ev.wd < self.inotify.offset) {
+                    try if(self.inotify.old.get(ev.wd)) |offset| {
+                        std.log.info("{d}, {d}", .{offset, ev.wd});
+                        try self.addFile(self.paths.items[@intCast(ev.wd - offset)]);
+                    }
+                    else if(ev.wd == 0) {continue;}
+                    else error.InvalidWatchDescriptor;
+                } else if (ev.wd > self.paths.items.len + self.inotify.offset)
+                    return error.InvalidWatchDescriptor;
+
+                const index = @as(usize, @intCast(@max(0, ev.wd))) - self.inotify.offset;
                 // Editors like vim create temporary files when saving
                 // So we have to re-add the file to the watcher
-                if (ev.mask & std.os.linux.IN.IGNORED != 0) {
-                    const wd_usize = @as(usize, @intCast(@max(0, ev.wd)));
-                    std.log.info("w {d}, l {d}, o {d}", .{wd_usize, self.paths.items.len, self.offset});
-                    std.log.info("{d}", .{self.paths.items.len});
-                    if(wd_usize == 0) continue;
-                    if (wd_usize > self.paths.items.len + self.offset or wd_usize < self.offset)
-                        return error.InvalidWatchDescriptor;
+                if (ev.mask & std.os.linux.IN.IGNORED == 0 and ev.mask & std.os.linux.IN.MODIFY == 0)
+                    continue;
 
-                    try self.addFile(self.paths.items[wd_usize - self.offset]);
-                    if (self.callback) |callback| {
-                        callback(self.context, .{
-                            .kind = .modified,
-                            .item = wd_usize - self.offset
-                        });
-                    }
-                } else if (ev.mask & std.os.linux.IN.MODIFY != 0) {
-                    if (self.callback) |callback| {
-                        callback(self.context, .{
-                            .kind = .modified,
-                            .item = @as(usize, @intCast(ev.wd)) - self.offset
-                        });
-                    }
-                }
+                if(ev.mask & std.os.linux.IN.IGNORED != 0)
+                    try self.addFile(self.paths.items[index]);
+                if (self.callback) |callback| callback(self.context, .{
+                    .kind = .modified,
+                    .item = index
+                });
             }
         }
     }

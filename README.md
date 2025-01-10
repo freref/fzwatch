@@ -12,7 +12,7 @@ zig build run-<filename>
 ### Usage
 A basic example can be found under [examples](./examples/basic.zig). The API is defined as follows:
 ```zig
-pub const Event = enum { modified };
+pub const Event = struct { kind: enum { modified }, item: usize };
 pub const Callback = fn (context: *anyopaque, event: Event) void;
 pub const Opts = struct { latency: f16 = 1.0 };
 

@@ -10,8 +10,8 @@ pub const LinuxWatcher = struct {
         offset: usize,
     },
     callback: ?*const interfaces.Callback,
-    running: bool,
     context: ?*anyopaque,
+    running: bool,
 
     pub fn init(allocator: std.mem.Allocator) !LinuxWatcher {
         const fd = try std.posix.inotify_init1(std.os.linux.IN.NONBLOCK);
@@ -22,11 +22,11 @@ pub const LinuxWatcher = struct {
             .paths = std.ArrayList([]const u8).init(allocator),
             .inotify = .{
                 .fd = @intCast(fd),
-                .offset     = 1,
+                .offset = 1,
             },
             .callback = null,
-            .running = false,
             .context = null,
+            .running = false,
         };
     }
 
@@ -87,17 +87,16 @@ pub const LinuxWatcher = struct {
             while (i < length) : (i += buffer[i].len + @sizeOf(std.os.linux.inotify_event)) {
                 const ev = buffer[i];
 
-                if(ev.wd == 0) {continue;}
-                else if(ev.wd < self.inotify.offset) {continue;}
+                if(ev.wd < self.inotify.offset) {continue;}
                 else if (ev.wd > self.paths.items.len + self.inotify.offset)
                     return error.InvalidWatchDescriptor;
+
+                if (ev.mask & std.os.linux.IN.IGNORED == 0 and ev.mask & std.os.linux.IN.MODIFY == 0)
+                    continue;
 
                 const index = @as(usize, @intCast(@max(0, ev.wd))) - self.inotify.offset;
                 // Editors like vim create temporary files when saving
                 // So we have to re-add the file to the watcher
-                if (ev.mask & std.os.linux.IN.IGNORED == 0 and ev.mask & std.os.linux.IN.MODIFY == 0)
-                    continue;
-
                 if(ev.mask & std.os.linux.IN.IGNORED != 0)
                     try self.addFile(self.paths.items[index]);
                 if (self.callback) |callback| callback(self.context, .{

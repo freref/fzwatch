@@ -4,4 +4,4 @@ pub const Event = struct {
     item: usize
 };
 pub const Callback = fn (context: ?*anyopaque, event: Event) void;
-pub const Opts = struct { latency: f16 = 1.0, notify: bool = false};
+pub const Opts = struct { latency: f16 = 1.0 };

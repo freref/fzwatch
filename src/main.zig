@@ -32,7 +32,7 @@ test "detects file modification" {
     var event_received = std.atomic.Value(bool).init(false);
     const callback = struct {
         fn handle(ctx: ?*anyopaque, ev: Event) void {
-            std.debug.assert(ev.kind == .modified);
+            std.debug.assert(ev == .modified);
 
             const flag = @as(*std.atomic.Value(bool), @ptrCast(ctx.?));
             flag.store(true, .release);

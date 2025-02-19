@@ -111,7 +111,7 @@ pub const LinuxWatcher = struct {
                 if (ev.mask & std.os.linux.IN.IGNORED != 0)
                     try self.addFile(self.paths.items[index]);
                 if (self.callback) |callback| callback(self.context, .{
-                    .kind = .modified,
+                    .modified,
                 });
             }
         }

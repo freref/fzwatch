@@ -8,7 +8,7 @@ const Object = struct {
     thread: ?std.Thread,
 
     fn callback(context: ?*anyopaque, event: fzwatch.Event) void {
-        switch (event.kind) {
+        switch (event) {
             .modified => {
                 const to_increment: *usize = @as(*usize, @ptrCast(@alignCast(context.?)));
                 to_increment.* += 1;

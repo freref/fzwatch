@@ -110,9 +110,7 @@ pub const LinuxWatcher = struct {
                 // So we have to re-add the file to the watcher
                 if (ev.mask & std.os.linux.IN.IGNORED != 0)
                     try self.addFile(self.paths.items[index]);
-                if (self.callback) |callback| callback(self.context, .{
-                    .modified,
-                });
+                if (self.callback) |callback| callback(self.context, .modified);
             }
         }
     }

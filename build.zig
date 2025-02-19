@@ -57,5 +57,20 @@ pub fn build(b: *std.Build) void {
     const run_step_context = b.step("run-context", "Run the example");
     run_step_context.dependOn(&run_cmd_context.step);
 
+    const test_step = b.addTest(.{
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    if (target.result.os.tag == .macos) {
+        test_step.linkFramework("CoreServices");
+    }
+    test_step.linkLibC();
+
+    const test_run = b.addRunArtifact(test_step);
+    const test_step_cmd = b.step("test", "Run library tests");
+    test_step_cmd.dependOn(&test_run.step);
+
     b.installArtifact(lib);
 }

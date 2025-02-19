@@ -29,3 +29,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v1
       - run: zig fmt --check src/*.zig
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v1
+        with:
+          version: 0.13.0
+      - run: zig build test

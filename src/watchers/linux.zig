@@ -59,7 +59,11 @@ pub const LinuxWatcher = struct {
         }
     }
 
-    pub fn setCallback(self: *LinuxWatcher, callback: interfaces.Callback, context: ?*anyopaque) void {
+    pub fn setCallback(
+        self: *LinuxWatcher,
+        callback: interfaces.Callback,
+        context: ?*anyopaque,
+    ) void {
         self.callback = callback;
         self.context = context;
     }
@@ -72,9 +76,15 @@ pub const LinuxWatcher = struct {
         var buffer: [4096]std.os.linux.inotify_event = undefined;
 
         while (self.running) {
-            const length = std.posix.read(self.inotify.fd, std.mem.sliceAsBytes(&buffer)) catch |err| switch (err) {
+            const length = std.posix.read(
+                self.inotify.fd,
+                std.mem.sliceAsBytes(&buffer),
+            ) catch |err| switch (err) {
                 error.WouldBlock => {
-                    std.time.sleep(@as(u64, @intFromFloat(@as(f64, opts.latency) * @as(f64, @floatFromInt(std.time.ns_per_s)))));
+                    std.time.sleep(@as(u64, @intFromFloat(@as(f64, opts.latency) * @as(
+                        f64,
+                        @floatFromInt(std.time.ns_per_s),
+                    ))));
                     continue;
                 },
                 else => {
@@ -87,8 +97,9 @@ pub const LinuxWatcher = struct {
             while (i < length) : (i += buffer[i].len + @sizeOf(std.os.linux.inotify_event)) {
                 const ev = buffer[i];
 
-                if(ev.wd < self.inotify.offset) {continue;}
-                else if (ev.wd > self.paths.items.len + self.inotify.offset)
+                if (ev.wd < self.inotify.offset) {
+                    continue;
+                } else if (ev.wd > self.paths.items.len + self.inotify.offset)
                     return error.InvalidWatchDescriptor;
 
                 if (ev.mask & std.os.linux.IN.IGNORED == 0 and ev.mask & std.os.linux.IN.MODIFY == 0)
@@ -97,11 +108,11 @@ pub const LinuxWatcher = struct {
                 const index = @as(usize, @intCast(@max(0, ev.wd))) - self.inotify.offset;
                 // Editors like vim create temporary files when saving
                 // So we have to re-add the file to the watcher
-                if(ev.mask & std.os.linux.IN.IGNORED != 0)
+                if (ev.mask & std.os.linux.IN.IGNORED != 0)
                     try self.addFile(self.paths.items[index]);
                 if (self.callback) |callback| callback(self.context, .{
                     .kind = .modified,
-                    .item = index
+                    .item = index,
                 });
             }
         }

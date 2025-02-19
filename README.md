@@ -1,18 +1,26 @@
 # fzwatch
+
 A lightweight and cross-platform file watcher for your Zig projects.
+
 > [!NOTE]
 > This project exists to support [fancy-cat](https://github.com/freref/fancy-cat) and has limited features.
 
 ## Instructions
+
 ### Run example
+
 You can run the [examples](./examples/) like so:
+
 ```sh
 zig build run-<filename>
 ```
+
 ### Usage
+
 A basic example can be found under [examples](./examples/basic.zig). The API is defined as follows:
+
 ```zig
-pub const Event = struct { kind: enum { modified }, item: usize };
+pub const Event = struct { kind: enum { modified }, index: usize };
 pub const Callback = fn (context: *anyopaque, event: Event) void;
 pub const Opts = struct { latency: f16 = 1.0 };
 
@@ -23,4 +31,4 @@ pub fn removeFile(self: *Watcher, path: []const u8) !void;
 pub fn setCallback(self: *Watcher, callback: Callback) void;
 pub fn start(self: *Watcher, opts: Opts) !void;
 pub fn stop(self: *Watcher) !void;
-````
+```

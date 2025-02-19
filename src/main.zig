@@ -13,6 +13,10 @@ pub const Watcher = switch (builtin.os.tag) {
     else => @compileError("Unsupported OS"),
 };
 
+comptime {
+    _ = Watcher;
+}
+
 test "detects file modification" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();

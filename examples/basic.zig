@@ -19,11 +19,6 @@ pub fn main() !void {
     defer watcher.deinit();
 
     try watcher.addFile("README.md");
-    // try watcher.removeFile("README.md");
-    try watcher.addFile("build.zig");
-    // try watcher.removeFile("build.zig");
-    try watcher.addFile("build.zig.zon");
-    try watcher.removeFile("build.zig.zon");
     watcher.setCallback(callback, null);
 
     const thread = try std.Thread.spawn(.{}, watcherThread, .{&watcher});

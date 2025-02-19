@@ -32,3 +32,11 @@ pub fn setCallback(self: *Watcher, callback: Callback) void;
 pub fn start(self: *Watcher, opts: Opts) !void;
 pub fn stop(self: *Watcher) !void;
 ```
+
+### Testing
+
+Run the test suite:
+
+```sh
+zig build test
+```

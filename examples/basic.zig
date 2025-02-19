@@ -4,7 +4,7 @@ const fzwatch = @import("fzwatch");
 fn callback(context: ?*anyopaque, event: fzwatch.Event) void {
     _ = context;
     switch (event.kind) {
-        .modified => std.debug.print("File {d} was modified!\n", .{event.index}),
+        .modified => std.debug.print("File was modified!\n", .{}),
     }
 }
 

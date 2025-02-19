@@ -87,7 +87,7 @@ pub const MacosWatcher = struct {
         while (i < numEvents) : (i += 1) {
             const flags = eventFlags[i];
             if (flags & c.kFSEventStreamEventFlagItemModified != 0) {
-                self.callback.?(self.context, .{ .kind = .modified, .index = i });
+                self.callback.?(self.context, .{ .kind = .modified });
             }
         }
     }

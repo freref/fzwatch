@@ -112,7 +112,6 @@ pub const LinuxWatcher = struct {
                     try self.addFile(self.paths.items[index]);
                 if (self.callback) |callback| callback(self.context, .{
                     .kind = .modified,
-                    .item = index,
                 });
             }
         }

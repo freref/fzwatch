@@ -10,7 +10,8 @@ const watchers = struct {
 pub const Watcher = switch (builtin.os.tag) {
     .macos => watchers.macos.MacosWatcher,
     .linux => watchers.linux.LinuxWatcher,
-    else => @compileError("Unsupported OS"),
+    .windows => watchers.linux.LinuxWatcher,
+    else => {},
 };
 
 comptime {

@@ -137,7 +137,7 @@ pub const MacosWatcher = struct {
         self.running = true;
 
         while (self.running) {
-            _ = c.CFRunLoopRunInMode(c.kCFRunLoopDefaultMode, 0, 1);
+            _ = c.CFRunLoopRunInMode(c.kCFRunLoopDefaultMode, opts.latency, 0);
         }
     }
 

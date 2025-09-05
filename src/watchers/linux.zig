@@ -19,7 +19,7 @@ pub const LinuxWatcher = struct {
 
         return LinuxWatcher{
             .allocator = allocator,
-            .paths = std.ArrayList([]const u8).init(allocator),
+            .paths = std.ArrayList([]const u8).empty,
             .inotify = .{
                 .fd = @intCast(fd),
                 .offset = 1,
@@ -32,7 +32,7 @@ pub const LinuxWatcher = struct {
 
     pub fn deinit(self: *LinuxWatcher) void {
         self.stop();
-        self.paths.deinit();
+        self.paths.deinit(self.allocator);
         std.posix.close(self.inotify.fd);
     }
 
@@ -43,7 +43,7 @@ pub const LinuxWatcher = struct {
             std.os.linux.IN.MODIFY,
         );
 
-        try self.paths.append(path);
+        try self.paths.append(self.allocator, path);
     }
 
     pub fn removeFile(self: *LinuxWatcher, path: []const u8) !void {

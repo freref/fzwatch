@@ -81,7 +81,7 @@ pub const LinuxWatcher = struct {
                 std.mem.sliceAsBytes(&buffer),
             ) catch |err| switch (err) {
                 error.WouldBlock => {
-                    std.time.sleep(@as(u64, @intFromFloat(@as(f64, opts.latency) * @as(
+                    std.Thread.sleep(@as(u64, @intFromFloat(@as(f64, opts.latency) * @as(
                         f64,
                         @floatFromInt(std.time.ns_per_s),
                     ))));

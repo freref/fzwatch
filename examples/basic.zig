@@ -26,7 +26,7 @@ pub fn main() !void {
     var i: usize = 0;
     while (true) : (i += 1) {
         std.debug.print("Working... (iteration {d})\n", .{i});
-        std.time.sleep(std.time.ns_per_s * 2);
+        std.Thread.sleep(std.time.ns_per_s * 2);
     }
 
     thread.join();

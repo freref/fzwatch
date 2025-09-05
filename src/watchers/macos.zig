@@ -17,7 +17,7 @@ pub const MacosWatcher = struct {
     pub fn init(allocator: std.mem.Allocator) !MacosWatcher {
         return MacosWatcher{
             .allocator = allocator,
-            .files = std.ArrayList(c.CFStringRef).init(allocator),
+            .files = std.ArrayList(c.CFStringRef).empty,
             .stream = null,
             .callback = null,
             .running = false,
@@ -30,7 +30,7 @@ pub const MacosWatcher = struct {
         for (self.files.items) |file| {
             c.CFRelease(file);
         }
-        self.files.deinit();
+        self.files.deinit(self.allocator);
     }
 
     pub fn addFile(self: *MacosWatcher, path: []const u8) !void {
@@ -42,7 +42,7 @@ pub const MacosWatcher = struct {
             0,
         );
 
-        try self.files.append(file);
+        try self.files.append(self.allocator, file);
     }
 
     pub fn removeFile(self: *MacosWatcher, path: []const u8) !void {
@@ -58,7 +58,7 @@ pub const MacosWatcher = struct {
         for (self.files.items, 0..) |file, index| {
             if (c.CFStringCompare(file, target, 0) == 0) {
                 c.CFRelease(file);
-                _ = self.files.orderedRemove(index);
+                _ = self.files.orderedRemove(self.allocator, index);
                 break;
             }
         }
@@ -76,7 +76,7 @@ pub const MacosWatcher = struct {
         eventPaths: ?*anyopaque,
         eventFlags: [*c]const c.FSEventStreamEventFlags,
         eventIds: [*c]const c.FSEventStreamEventId,
-    ) callconv(.C) void {
+    ) callconv(.c) void {
         _ = stream;
         _ = eventPaths;
         _ = eventIds;

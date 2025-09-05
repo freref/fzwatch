@@ -50,7 +50,7 @@ test "detects file modification" {
         }
     }.run, .{&watcher});
 
-    std.time.sleep(100_000_000);
+    std.Thread.sleep(100_000_000);
 
     try tmp.dir.writeFile(.{
         .sub_path = file_path,
@@ -63,7 +63,7 @@ test "detects file modification" {
             std.debug.print("Timeout waiting for event\n", .{});
             return error.TestFailed;
         }
-        std.time.sleep(10_000_000);
+        std.Thread.sleep(10_000_000);
     }
 
     watcher.stop();

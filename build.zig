@@ -4,11 +4,15 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const lib = b.addStaticLibrary(.{
-        .name = "fzwatch",
+    const main_module = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
+    });
+
+    const lib = b.addLibrary(.{
+        .name = "fzwatch",
+        .root_module = main_module,
     });
 
     if (target.result.os.tag == .macos) {
@@ -17,20 +21,18 @@ pub fn build(b: *std.Build) void {
 
     lib.linkLibC();
 
-    const module = b.addModule("fzwatch", .{
-        .root_source_file = b.path("src/main.zig"),
-    });
-
-    module.linkLibrary(lib);
+    // main_module.linkLibrary(lib);
 
     // Basic example
     const basic = b.addExecutable(.{
         .name = "fzwatch-example",
-        .root_source_file = b.path("examples/basic.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/basic.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
-    basic.root_module.addImport("fzwatch", module);
+    basic.root_module.addImport("fzwatch", main_module);
 
     const run_cmd = b.addRunArtifact(basic);
     run_cmd.step.dependOn(b.getInstallStep());
@@ -43,11 +45,13 @@ pub fn build(b: *std.Build) void {
     // Context example
     const context = b.addExecutable(.{
         .name = "fzwatch-context",
-        .root_source_file = b.path("examples/context.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("examples/context.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
-    context.root_module.addImport("fzwatch", module);
+    context.root_module.addImport("fzwatch", main_module);
 
     const run_cmd_context = b.addRunArtifact(context);
     run_cmd_context.step.dependOn(b.getInstallStep());
@@ -57,11 +61,7 @@ pub fn build(b: *std.Build) void {
     const run_step_context = b.step("run-context", "Run the example");
     run_step_context.dependOn(&run_cmd_context.step);
 
-    const test_step = b.addTest(.{
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+    const test_step = b.addTest(.{ .root_module = main_module });
 
     if (target.result.os.tag == .macos) {
         test_step.linkFramework("CoreServices");

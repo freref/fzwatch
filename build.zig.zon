@@ -1,6 +1,6 @@
 .{
     .name = .fzwatch,
-    .minimum_zig_version = "0.14.0",
+    .minimum_zig_version = "0.15.1",
     .fingerprint = 0x499a353d3836a3ea,
     .version = "0.2.2",
     .paths = .{

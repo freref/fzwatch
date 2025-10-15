@@ -92,7 +92,7 @@ pub const LinuxWatcher = struct {
 
             // in bytes
             var i: usize = 0;
-            while (i < length) : (i += buffer[i].len + @sizeOf(std.os.linux.inotify_event)) {
+            while (i < length) {
                 if (i + @sizeOf(std.os.linux.inotify_event) > length) break;
 
                 const ev_ptr: *align(1) std.os.linux.inotify_event =

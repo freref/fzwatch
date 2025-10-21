@@ -15,10 +15,19 @@ fn watcherThread(watcher: *fzwatch.Watcher) !void {
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    if (args.len < 2) {
+        std.debug.print("Usage: {s} <file-to-watch>\n", .{args[0]});
+        return error.InvalidArgument;
+    }
+    const target_file = args[1];
+
     var watcher = try fzwatch.Watcher.init(allocator);
     defer watcher.deinit();
 
-    try watcher.addFile("README.md");
+    try watcher.addFile(target_file);
     watcher.setCallback(callback, null);
 
     const thread = try std.Thread.spawn(.{}, watcherThread, .{&watcher});

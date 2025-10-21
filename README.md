@@ -12,7 +12,7 @@ A lightweight and cross-platform file watcher for your Zig projects.
 You can run the [examples](./examples/) like so:
 
 ```sh
-zig build run-<filename>
+zig build run-<example-filename> -- <file-to-watch>
 ```
 
 ### Usage

@@ -1,6 +1,5 @@
 const std = @import("std");
 const interfaces = @import("interfaces.zig");
-const log = std.log.scoped(.vaxis);
 
 pub const LinuxWatcher = struct {
     allocator: std.mem.Allocator,
@@ -15,7 +14,6 @@ pub const LinuxWatcher = struct {
     running: bool,
 
     pub fn init(allocator: std.mem.Allocator) !LinuxWatcher {
-        log.debug("init watcher", .{});
         const fd = try std.posix.inotify_init1(std.os.linux.IN.NONBLOCK);
         errdefer std.posix.close(fd);
 
@@ -40,14 +38,12 @@ pub const LinuxWatcher = struct {
 
     pub fn addFile(self: *LinuxWatcher, path: []const u8) !void {
         try std.fs.cwd().access(path, .{});
-        log.debug("file added to watcher", .{});
-        const wd = try std.posix.inotify_add_watch(
+        _ = try std.posix.inotify_add_watch(
             self.inotify.fd,
             path,
             std.os.linux.IN.MODIFY | std.os.linux.IN.CLOSE_WRITE | std.os.linux.IN.ATTRIB | std.os.linux.IN.MOVE_SELF | std.os.linux.IN.DELETE_SELF,
         );
 
-        log.debug("added watch: wd={} for {s}", .{ wd, path });
         try self.paths.append(self.allocator, path);
     }
 
@@ -75,9 +71,7 @@ pub const LinuxWatcher = struct {
 
     pub fn start(self: *LinuxWatcher, opts: interfaces.Opts) !void {
         // TODO add polling instead of busy waiting
-        log.debug("start executed in the watcher", .{});
         if (self.paths.items.len == 0) return error.NoFilesToWatch;
-        log.debug("there are files to watch", .{});
 
         self.running = true;
         var buffer: [4096]std.os.linux.inotify_event = undefined;
@@ -99,8 +93,6 @@ pub const LinuxWatcher = struct {
                 },
             };
 
-            log.debug("read {} bytes from inotify", .{length});
-
             // in bytes
             var i: usize = 0;
             while (i < length) : (i += buffer[i].len + @sizeOf(std.os.linux.inotify_event)) {
@@ -117,7 +109,6 @@ pub const LinuxWatcher = struct {
                 if (ev.mask & (std.os.linux.IN.DELETE_SELF | std.os.linux.IN.MOVE_SELF | std.os.linux.IN.IGNORED) != 0) {
                     try self.addFile(self.paths.items[index]);
                 }
-                log.debug("event: wd={}, mask={}", .{ ev.wd, ev.mask });
                 if (self.callback) |callback| callback(self.context, .modified);
             }
         }

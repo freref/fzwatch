@@ -120,6 +120,8 @@ pub const LinuxWatcher = struct {
                 if (ev.mask & (linux.IN.DELETE_SELF | linux.IN.MOVE_SELF |
                     linux.IN.IGNORED) != 0)
                 {
+                    _ = self.wd_to_path.remove(ev.wd);
+                    _ = self.path_to_wd.remove(path);
                     try self._addFile(path);
                 }
 

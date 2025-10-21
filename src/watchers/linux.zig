@@ -37,7 +37,6 @@ pub const LinuxWatcher = struct {
     }
 
     pub fn addFile(self: *LinuxWatcher, path: []const u8) !void {
-        try std.fs.cwd().access(path, .{});
         _ = try std.posix.inotify_add_watch(
             self.inotify.fd,
             path,

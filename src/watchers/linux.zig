@@ -1,5 +1,6 @@
 const std = @import("std");
 const interfaces = @import("interfaces.zig");
+const log = std.log.scoped(.vaxis);
 
 pub const LinuxWatcher = struct {
     allocator: std.mem.Allocator,
@@ -14,6 +15,7 @@ pub const LinuxWatcher = struct {
     running: bool,
 
     pub fn init(allocator: std.mem.Allocator) !LinuxWatcher {
+        log.debug("init watcher", .{});
         const fd = try std.posix.inotify_init1(std.os.linux.IN.NONBLOCK);
         errdefer std.posix.close(fd);
 
@@ -37,12 +39,15 @@ pub const LinuxWatcher = struct {
     }
 
     pub fn addFile(self: *LinuxWatcher, path: []const u8) !void {
-        _ = try std.posix.inotify_add_watch(
+        try std.fs.cwd().access(path, .{});
+        log.debug("file added to watcher", .{});
+        const wd = try std.posix.inotify_add_watch(
             self.inotify.fd,
             path,
-            std.os.linux.IN.MODIFY,
+            std.os.linux.IN.MODIFY | std.os.linux.IN.CLOSE_WRITE | std.os.linux.IN.ATTRIB | std.os.linux.IN.MOVE_SELF | std.os.linux.IN.DELETE_SELF,
         );
 
+        log.debug("added watch: wd={} for {s}", .{ wd, path });
         try self.paths.append(self.allocator, path);
     }
 
@@ -70,19 +75,23 @@ pub const LinuxWatcher = struct {
 
     pub fn start(self: *LinuxWatcher, opts: interfaces.Opts) !void {
         // TODO add polling instead of busy waiting
+        log.debug("start executed in the watcher", .{});
         if (self.paths.items.len == 0) return error.NoFilesToWatch;
+        log.debug("there are files to watch", .{});
 
         self.running = true;
-        var buffer: [65536]u8 = undefined;
+        var buffer: [4096]std.os.linux.inotify_event = undefined;
 
         while (self.running) {
             const length = std.posix.read(
                 self.inotify.fd,
-                &buffer,
+                std.mem.sliceAsBytes(&buffer),
             ) catch |err| switch (err) {
                 error.WouldBlock => {
-                    std.Thread.sleep(@as(u64, @intFromFloat(@as(f64, opts.latency) *
-                        @as(f64, @floatFromInt(std.time.ns_per_s)))));
+                    std.Thread.sleep(@as(u64, @intFromFloat(@as(f64, opts.latency) * @as(
+                        f64,
+                        @floatFromInt(std.time.ns_per_s),
+                    ))));
                     continue;
                 },
                 else => {
@@ -90,43 +99,26 @@ pub const LinuxWatcher = struct {
                 },
             };
 
+            log.debug("read {} bytes from inotify", .{length});
+
             // in bytes
             var i: usize = 0;
-            while (i < length) {
-                if (i + @sizeOf(std.os.linux.inotify_event) > length) break;
-
-                const ev_ptr: *align(1) std.os.linux.inotify_event =
-                    @ptrCast(buffer[i..][0..@sizeOf(std.os.linux.inotify_event)].ptr);
-                const ev = ev_ptr.*;
-
-                const step = @sizeOf(std.os.linux.inotify_event) + ev.len;
-
-                if (i + step > length) break;
+            while (i < length) : (i += buffer[i].len + @sizeOf(std.os.linux.inotify_event)) {
+                const ev = buffer[i];
 
                 if (ev.wd < self.inotify.offset) {
-                    i += step;
                     continue;
-                } else if (ev.wd > self.paths.items.len + self.inotify.offset) {
+                } else if (ev.wd > self.paths.items.len + self.inotify.offset)
                     return error.InvalidWatchDescriptor;
-                }
-
-                if ((ev.mask & std.os.linux.IN.IGNORED == 0) and
-                    (ev.mask & std.os.linux.IN.MODIFY == 0))
-                {
-                    i += step;
-                    continue;
-                }
 
                 const index = @as(usize, @intCast(@max(0, ev.wd))) - self.inotify.offset;
                 // Editors like vim create temporary files when saving
                 // So we have to re-add the file to the watcher
-                if (ev.mask & std.os.linux.IN.IGNORED != 0) {
+                if (ev.mask & (std.os.linux.IN.DELETE_SELF | std.os.linux.IN.MOVE_SELF | std.os.linux.IN.IGNORED) != 0) {
                     try self.addFile(self.paths.items[index]);
                 }
-
+                log.debug("event: wd={}, mask={}", .{ ev.wd, ev.mask });
                 if (self.callback) |callback| callback(self.context, .modified);
-
-                i += step;
             }
         }
     }

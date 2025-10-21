@@ -37,10 +37,11 @@ pub const LinuxWatcher = struct {
     }
 
     pub fn addFile(self: *LinuxWatcher, path: []const u8) !void {
+        try std.fs.cwd().access(path, .{});
         _ = try std.posix.inotify_add_watch(
             self.inotify.fd,
             path,
-            std.os.linux.IN.MODIFY,
+            std.os.linux.IN.MODIFY | std.os.linux.IN.CLOSE_WRITE | std.os.linux.IN.ATTRIB | std.os.linux.IN.MOVE_SELF | std.os.linux.IN.DELETE_SELF,
         );
 
         try self.paths.append(self.allocator, path);
@@ -102,14 +103,12 @@ pub const LinuxWatcher = struct {
                 } else if (ev.wd > self.paths.items.len + self.inotify.offset)
                     return error.InvalidWatchDescriptor;
 
-                if (ev.mask & std.os.linux.IN.IGNORED == 0 and ev.mask & std.os.linux.IN.MODIFY == 0)
-                    continue;
-
                 const index = @as(usize, @intCast(@max(0, ev.wd))) - self.inotify.offset;
                 // Editors like vim create temporary files when saving
                 // So we have to re-add the file to the watcher
-                if (ev.mask & std.os.linux.IN.IGNORED != 0)
+                if (ev.mask & (std.os.linux.IN.DELETE_SELF | std.os.linux.IN.MOVE_SELF | std.os.linux.IN.IGNORED) != 0) {
                     try self.addFile(self.paths.items[index]);
+                }
                 if (self.callback) |callback| callback(self.context, .modified);
             }
         }

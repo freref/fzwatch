@@ -17,9 +17,9 @@ const Object = struct {
         }
     }
 
-    pub fn init(allocator: std.mem.Allocator) !Object {
+    pub fn init(allocator: std.mem.Allocator, target_file: [:0]u8) !Object {
         var watcher = try fzwatch.Watcher.init(allocator);
-        try watcher.addFile("README.md");
+        try watcher.addFile(target_file);
 
         return Object{
             .allocator = allocator,
@@ -45,7 +45,17 @@ const Object = struct {
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
-    var obj = try Object.init(allocator);
+
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    if (args.len < 2) {
+        std.debug.print("Usage: {s} <file-to-watch>\n", .{args[0]});
+        return error.InvalidArgument;
+    }
+    const target_file = args[1];
+
+    var obj = try Object.init(allocator, target_file);
     defer obj.deinit();
     try obj.start();
 

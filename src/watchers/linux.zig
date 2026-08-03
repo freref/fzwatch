@@ -13,8 +13,8 @@ pub const LinuxWatcher = struct {
     running: bool,
 
     pub fn init(allocator: std.mem.Allocator) !LinuxWatcher {
-        const fd = try std.posix.inotify_init1(linux.IN.NONBLOCK);
-        errdefer std.posix.close(fd);
+        const fd = try inotifyInit(linux.IN.NONBLOCK);
+        errdefer _ = linux.close(fd);
 
         return LinuxWatcher{
             .allocator = allocator,
@@ -32,7 +32,7 @@ pub const LinuxWatcher = struct {
         self.stop();
         self.wd_to_path.deinit();
         self.path_to_wd.deinit();
-        std.posix.close(self.fd);
+        _ = linux.close(self.fd);
     }
 
     pub fn addFile(self: *LinuxWatcher, path: []const u8) !void {
@@ -41,7 +41,7 @@ pub const LinuxWatcher = struct {
     }
 
     fn _addFile(self: *LinuxWatcher, path: []const u8) !void {
-        const wd = try std.posix.inotify_add_watch(
+        const wd = try inotifyAddWatch(
             self.fd,
             path,
             linux.IN.MODIFY | linux.IN.CLOSE_WRITE | linux.IN.ATTRIB | linux.IN.MOVE_SELF |
@@ -55,7 +55,7 @@ pub const LinuxWatcher = struct {
 
     pub fn removeFile(self: *LinuxWatcher, path: []const u8) !void {
         if (self.path_to_wd.get(path)) |wd| {
-            _ = std.posix.inotify_rm_watch(self.fd, wd);
+            _ = linux.inotify_rm_watch(self.fd, wd);
             _ = self.path_to_wd.remove(path);
             _ = self.wd_to_path.remove(wd);
             self.file_count -= 1;
@@ -77,7 +77,7 @@ pub const LinuxWatcher = struct {
         self.context = context;
     }
 
-    pub fn start(self: *LinuxWatcher, opts: interfaces.Opts) !void {
+    pub fn start(self: *LinuxWatcher, io: std.Io, opts: interfaces.Opts) !void {
         // TODO add polling instead of busy waiting
         if (self.file_count == 0) return error.NoFilesToWatch;
 
@@ -85,15 +85,11 @@ pub const LinuxWatcher = struct {
         var buffer: [65536]u8 = undefined;
 
         while (self.running) {
-            const length = std.posix.read(
-                self.fd,
-                &buffer,
-            ) catch |err| switch (err) {
+            const length = std.posix.read(self.fd, &buffer) catch |err| switch (err) {
                 error.WouldBlock => {
-                    std.Thread.sleep(@as(u64, @intFromFloat(@as(f64, opts.latency) * @as(
-                        f64,
-                        @floatFromInt(std.time.ns_per_s),
-                    ))));
+                    try std.Io.sleep(io, .fromNanoseconds(@intFromFloat(
+                        @as(f64, opts.latency) * @as(f64, @floatFromInt(std.time.ns_per_s)),
+                    )), .awake);
                     continue;
                 },
                 else => {
@@ -136,3 +132,56 @@ pub const LinuxWatcher = struct {
         self.running = false;
     }
 };
+
+const InotifyInitError = error{
+    InvalidArgument,
+    ProcessFdQuotaExceeded,
+    SystemFdQuotaExceeded,
+    SystemResources,
+    Unexpected,
+};
+
+fn inotifyInit(flags: u32) InotifyInitError!i32 {
+    const rc = linux.inotify_init1(flags);
+    return switch (linux.errno(rc)) {
+        .SUCCESS => @intCast(rc),
+        .INVAL => error.InvalidArgument,
+        .MFILE => error.ProcessFdQuotaExceeded,
+        .NFILE => error.SystemFdQuotaExceeded,
+        .NOMEM => error.SystemResources,
+        else => |err| std.posix.unexpectedErrno(err),
+    };
+}
+
+const InotifyAddWatchError = error{
+    AccessDenied,
+    BadFileDescriptor,
+    FileNotFound,
+    InvalidArgument,
+    InvalidMemoryAddress,
+    NameTooLong,
+    NotDir,
+    SystemResources,
+    Unexpected,
+    UserResourceLimitReached,
+    WatchAlreadyExists,
+};
+
+fn inotifyAddWatch(fd: i32, path: []const u8, mask: u32) InotifyAddWatchError!i32 {
+    const path_c = try std.posix.toPosixPath(path);
+    const rc = linux.inotify_add_watch(fd, &path_c, mask);
+    return switch (linux.errno(rc)) {
+        .SUCCESS => @intCast(rc),
+        .ACCES => error.AccessDenied,
+        .BADF => error.BadFileDescriptor,
+        .FAULT => error.InvalidMemoryAddress,
+        .INVAL => error.InvalidArgument,
+        .NAMETOOLONG => error.NameTooLong,
+        .NOENT => error.FileNotFound,
+        .NOMEM => error.SystemResources,
+        .NOSPC => error.UserResourceLimitReached,
+        .NOTDIR => error.NotDir,
+        .EXIST => error.WatchAlreadyExists,
+        else => |err| std.posix.unexpectedErrno(err),
+    };
+}

@@ -8,15 +8,15 @@ fn callback(context: ?*anyopaque, event: fzwatch.Event) void {
     }
 }
 
-fn watcherThread(watcher: *fzwatch.Watcher) !void {
-    try watcher.start(.{});
+fn watcherThread(watcher: *fzwatch.Watcher, io: std.Io) !void {
+    try watcher.start(io, .{});
 }
 
-pub fn main() !void {
-    const allocator = std.heap.page_allocator;
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
+    const io = init.io;
 
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
 
     if (args.len < 2) {
         std.debug.print("Usage: {s} <file-to-watch>\n", .{args[0]});
@@ -30,12 +30,12 @@ pub fn main() !void {
     try watcher.addFile(target_file);
     watcher.setCallback(callback, null);
 
-    const thread = try std.Thread.spawn(.{}, watcherThread, .{&watcher});
+    const thread = try std.Thread.spawn(.{}, watcherThread, .{ &watcher, io });
 
     var i: usize = 0;
     while (true) : (i += 1) {
         std.debug.print("Working... (iteration {d})\n", .{i});
-        std.Thread.sleep(std.time.ns_per_s * 2);
+        try std.Io.sleep(io, .fromSeconds(2), .awake);
     }
 
     thread.join();

@@ -16,10 +16,15 @@ pub fn build(b: *std.Build) void {
     });
 
     if (target.result.os.tag == .macos) {
-        lib.linkFramework("CoreServices");
+        const translate_c = b.addTranslateC(.{
+            .root_source_file = b.path("src/macos.h"),
+            .target = target,
+            .optimize = optimize,
+        });
+        mod.addImport("c", translate_c.createModule());
+        mod.linkFramework("CoreServices", .{});
+        mod.link_libc = true;
     }
-
-    lib.linkLibC();
 
     // main_module.linkLibrary(lib);
 
@@ -62,11 +67,6 @@ pub fn build(b: *std.Build) void {
     run_step_context.dependOn(&run_cmd_context.step);
 
     const test_step = b.addTest(.{ .root_module = mod });
-
-    if (target.result.os.tag == .macos) {
-        test_step.linkFramework("CoreServices");
-    }
-    test_step.linkLibC();
 
     const test_run = b.addRunArtifact(test_step);
     const test_step_cmd = b.step("test", "Run library tests");

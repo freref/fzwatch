@@ -1,9 +1,6 @@
 const std = @import("std");
-const darwin = std.os.darwin;
 const interfaces = @import("interfaces.zig");
-const c = @cImport({
-    @cInclude("CoreServices/CoreServices.h");
-});
+const c = @import("c");
 
 pub const MacosWatcher = struct {
     allocator: std.mem.Allocator,
@@ -92,7 +89,8 @@ pub const MacosWatcher = struct {
         }
     }
 
-    pub fn start(self: *MacosWatcher, opts: interfaces.Opts) !void {
+    pub fn start(self: *MacosWatcher, io: std.Io, opts: interfaces.Opts) !void {
+        _ = io;
         if (self.files.items.len == 0) return error.NoFilesToWatch;
 
         const files = c.CFArrayCreate(

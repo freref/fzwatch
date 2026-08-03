@@ -29,7 +29,7 @@ pub fn deinit(self: *Watcher) void;
 pub fn addFile(self: *Watcher, path: []const u8) !void;
 pub fn removeFile(self: *Watcher, path: []const u8) !void;
 pub fn setCallback(self: *Watcher, callback: Callback) void;
-pub fn start(self: *Watcher, opts: Opts) !void;
+pub fn start(self: *Watcher, io: std.Io, opts: Opts) !void;
 pub fn stop(self: *Watcher) !void;
 ```
 
